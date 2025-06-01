@@ -11,7 +11,7 @@ use ratatui::{
         Constraint::{self},
         Layout, Rect,
     },
-    style::{Color, Stylize},
+    style::{Color, Style, Styled, Stylize},
     symbols,
     widgets::{Axis, Block, Chart, Dataset, GraphType, Paragraph, Row, Table, Widget},
 };
@@ -208,9 +208,9 @@ impl App {
         let mut rows = Vec::new();
         for d in &self.devices {
             rows.push(Row::new(vec![
-                format!("{}", d.electricity_rate),
-                format!("{}", d.initial_cost),
-                format!("{}", d.average_wattage.watts),
+                format!("{}", d.electricity_rate).set_style(Style::new().fg(d.color)),
+                format!("{}", d.initial_cost).set_style(Style::new().fg(d.color)),
+                format!("{}", d.average_wattage.watts).set_style(Style::new().fg(d.color)),
             ]));
         }
 
@@ -245,6 +245,7 @@ impl App {
                     .marker(symbols::Marker::Braille)
                     .graph_type(GraphType::Line)
                     .fg(d.color)
+                    .bg(Color::Black)
                     .data(data_points),
             );
             if cost > max_cost {
