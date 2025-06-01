@@ -12,7 +12,7 @@ use ratatui::{
         Layout, Rect,
     },
     style::{Color, Stylize},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Paragraph, Row, Table, Widget},
 };
 
 use device::Device;
@@ -54,7 +54,6 @@ impl Highlighted {
 
 struct App {
     devices: Vec<Device>,
-    current_rate: f64,
     exit: bool,
 
     electricity_rate: Textbox,
@@ -68,7 +67,6 @@ impl App {
         Self {
             devices: Vec::new(),
             exit: false,
-            current_rate: 6.0,
 
             electricity_rate: Textbox::new(),
             initial_cost: Textbox::new(),
@@ -115,8 +113,8 @@ impl App {
             KeyCode::Right => textbox.move_cursor_right(),
             KeyCode::Char(c) => textbox.enter_char(c),
             KeyCode::Backspace => textbox.delete_char(),
+            KeyCode::Enter => self.add_device(),
 
-            // KeyCode::Enter => self.submit_message(),
             _ => {}
         }
     }
@@ -125,22 +123,34 @@ impl App {
         self.exit = true;
     }
 
-    pub fn add_device(&mut self, initial_cost: f64, average_wattage: Wattage) {
-        self.devices.push(Device {
+    pub fn add_device(&mut self) {
+        let initial_cost = match self.initial_cost.input.parse() {
+            Ok(x) => x,
+            Err(_) => todo!(),
+        };
+
+        let average_wattage = match self.wattage.input.parse() {
+            Ok(x) => Wattage::new(x),
+            Err(_) => todo!(),
+        };
+
+        let electricity_rate = match self.electricity_rate.input.parse() {
+            Ok(x) => x,
+            Err(_) => todo!(),
+        };
+
+        let d = Device {
             initial_cost,
             average_wattage,
-            electricity_rate: self.current_rate,
-        });
+            electricity_rate,
+        };
+
+        if !self.devices.contains(&d) {
+            self.devices.push(d);
+        }
     }
-}
 
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let main_layout =
-            Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]);
-
-        let [equation_area, graph_area] = main_layout.areas(area);
-
+    fn render_equations(&self, area: Rect, buf: &mut Buffer) {
         let equation_layout = Layout::vertical([
             Constraint::Length(3),
             Constraint::Length(3),
@@ -148,8 +158,7 @@ impl Widget for &App {
             Constraint::Percentage(100),
         ]);
 
-        let [rate_area, cost_area, wattage_area, devices_area] =
-            equation_layout.areas(equation_area);
+        let [rate_area, cost_area, wattage_area, devices_area] = equation_layout.areas(area);
 
         let highlighted_color = Color::Red;
         let unhighlighted_color = Color::Gray;
@@ -165,57 +174,54 @@ impl Widget for &App {
         }
 
         Paragraph::new(self.electricity_rate.input.clone())
-            .block(Block::bordered())
+            .block(Block::bordered().title("Electrity Rate in kWh/$"))
             .fg(rate_color)
             .render(rate_area, buf);
 
         Paragraph::new(self.initial_cost.input.clone())
-            .block(Block::bordered())
+            .block(Block::bordered().title("Upfront Cost of the Device"))
             .fg(cost_color)
             .render(cost_area, buf);
 
         Paragraph::new(self.wattage.input.clone())
-            .block(Block::bordered())
+            .block(Block::bordered().title("Average Wattage of the Device"))
             .fg(wattage_color)
             .render(wattage_area, buf);
 
-        Paragraph::new("TODO")
-            .block(Block::bordered())
-            .render(devices_area, buf);
+        let mut rows = Vec::new();
+        for d in &self.devices {
+            rows.push(Row::new(vec![
+                format!("{}", d.electricity_rate),
+                format!("{}", d.initial_cost),
+                format!("{}", d.average_wattage.watts),
+            ]));
+        }
 
-        // let devices_cost_over_time = vec![
-        //     Dataset::default()
-        //         .name("Line from only 2 points".italic())
-        //         .marker(symbols::Marker::Braille)
-        //         .style(Style::default().fg(Color::Yellow))
-        //         .graph_type(GraphType::Line)
-        //         .data(&[(1., 1.), (4., 4.)]),
-        // ];
-        //
-        // let mut x_labels = Vec::new();
-        // for i in 0..25 {
-        //     x_labels.push(format!("{}", i));
-        // }
-        //
-        // Chart::new(devices_cost_over_time).render(graph_area, buf);
+        Table::new(
+            rows,
+            [
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+            ],
+        )
+        .header(Row::new(vec![
+            "Rate (kWh/$)",
+            "Upfront ($)",
+            "Average Wattage (W)",
+        ]))
+        .block(Block::bordered())
+        .render(devices_area, buf);
+    }
+}
 
-        // Chart::new(datasets)
-        //     .block(Block::bordered().title(Line::from("Cost over time").cyan().bold().centered()))
-        //     .x_axis(
-        //         Axis::default()
-        //             .title("Months passed")
-        //             // .style(Style::default().gray())
-        //             .bounds([0.0, 36.0])
-        //             .labels(x_labels),
-        //     )
-        //     .y_axis(
-        //         Axis::default()
-        //             .title("USD spent")
-        //             .style(Style::default().gray())
-        //             .bounds([0.0, 5.0]), // .labels(["0".bold(), "2.5".into(), "5.0".bold()]),
-        //     )
-        //     .legend_position(Some(LegendPosition::TopLeft))
-        //     .hidden_legend_constraints((Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)))
-        //     .render(graph_area, buf);
+impl Widget for &App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let main_layout =
+            Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]);
+
+        let [equation_area, graph_area] = main_layout.areas(area);
+
+        self.render_equations(equation_area, buf);
     }
 }

@@ -1,5 +1,6 @@
 use crate::{timespan::Timespan, wattage::Wattage};
 
+#[derive(PartialEq)]
 pub struct Device {
     pub initial_cost: f64,
     pub average_wattage: Wattage,

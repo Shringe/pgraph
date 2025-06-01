@@ -1,3 +1,4 @@
+#[derive(PartialEq)]
 pub struct Wattage {
     pub watts: f64,
     pub kilowatts: f64,
