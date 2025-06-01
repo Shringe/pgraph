@@ -10,6 +10,7 @@ pub struct Device {
     pub electricity_rate: f64,
 
     pub color: Color,
+    pub name: String,
 }
 
 impl PartialEq for Device {

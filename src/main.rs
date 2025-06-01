@@ -35,14 +35,16 @@ enum Highlighted {
     ElectricityRate,
     InitialCost,
     Wattage,
+    Name,
 }
 
 impl Highlighted {
     pub fn up(&self) -> Self {
         match self {
-            Highlighted::ElectricityRate => Self::Wattage,
+            Highlighted::ElectricityRate => Self::Name,
             Highlighted::InitialCost => Self::ElectricityRate,
             Highlighted::Wattage => Self::InitialCost,
+            Highlighted::Name => Self::Wattage,
         }
     }
 
@@ -50,7 +52,8 @@ impl Highlighted {
         match self {
             Highlighted::ElectricityRate => Self::InitialCost,
             Highlighted::InitialCost => Self::Wattage,
-            Highlighted::Wattage => Self::ElectricityRate,
+            Highlighted::Wattage => Self::Name,
+            Highlighted::Name => Self::ElectricityRate,
         }
     }
 }
@@ -62,6 +65,7 @@ struct App {
     electricity_rate: Textbox,
     initial_cost: Textbox,
     wattage: Textbox,
+    name: Textbox,
     highlighted: Highlighted,
 
     randomize_graph_colors: bool,
@@ -76,6 +80,7 @@ impl App {
             electricity_rate: Textbox::new(),
             initial_cost: Textbox::new(),
             wattage: Textbox::new(),
+            name: Textbox::new(),
             highlighted: Highlighted::ElectricityRate,
 
             randomize_graph_colors: true,
@@ -110,6 +115,7 @@ impl App {
             Highlighted::ElectricityRate => &mut self.electricity_rate,
             Highlighted::InitialCost => &mut self.initial_cost,
             Highlighted::Wattage => &mut self.wattage,
+            Highlighted::Name => &mut self.name,
         };
 
         match key.code {
@@ -148,6 +154,8 @@ impl App {
             Err(_) => todo!(),
         };
 
+        let name = self.name.input.clone();
+
         let color = if self.randomize_graph_colors {
             let mut rng = rand::rng();
             Color::Rgb(rng.random(), rng.random(), rng.random())
@@ -160,6 +168,7 @@ impl App {
             average_wattage,
             electricity_rate,
             color,
+            name,
         };
 
         if !self.devices.contains(&d) {
@@ -172,10 +181,12 @@ impl App {
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
+            Constraint::Length(3),
             Constraint::Percentage(100),
         ]);
 
-        let [rate_area, cost_area, wattage_area, devices_area] = equation_layout.areas(area);
+        let [rate_area, cost_area, wattage_area, name_area, devices_area] =
+            equation_layout.areas(area);
 
         let highlighted_color = Color::Red;
         let unhighlighted_color = Color::Gray;
@@ -183,11 +194,13 @@ impl App {
         let mut rate_color = unhighlighted_color;
         let mut cost_color = unhighlighted_color;
         let mut wattage_color = unhighlighted_color;
+        let mut name_color = unhighlighted_color;
 
         match self.highlighted {
             Highlighted::ElectricityRate => rate_color = highlighted_color,
             Highlighted::InitialCost => cost_color = highlighted_color,
             Highlighted::Wattage => wattage_color = highlighted_color,
+            Highlighted::Name => name_color = highlighted_color,
         }
 
         Paragraph::new(self.electricity_rate.input.clone())
@@ -205,9 +218,15 @@ impl App {
             .fg(wattage_color)
             .render(wattage_area, buf);
 
+        Paragraph::new(self.name.input.clone())
+            .block(Block::bordered().title("Optional Name"))
+            .fg(name_color)
+            .render(name_area, buf);
+
         let mut rows = Vec::new();
         for d in &self.devices {
             rows.push(Row::new(vec![
+                format!("{}", d.name).set_style(Style::new().fg(d.color)),
                 format!("{}", d.electricity_rate).set_style(Style::new().fg(d.color)),
                 format!("{}", d.initial_cost).set_style(Style::new().fg(d.color)),
                 format!("{}", d.average_wattage.watts).set_style(Style::new().fg(d.color)),
@@ -217,12 +236,14 @@ impl App {
         Table::new(
             rows,
             [
+                Constraint::Percentage(10),
                 Constraint::Ratio(1, 3),
                 Constraint::Ratio(1, 3),
                 Constraint::Ratio(1, 3),
             ],
         )
         .header(Row::new(vec![
+            "Name",
             "Rate (kWh/$)",
             "Upfront ($)",
             "Average Wattage (W)",
@@ -253,11 +274,6 @@ impl App {
             }
         }
 
-        // let mut y_lables = Vec::new();
-        // let eight = max_cost / 8.0;
-        // for i in 1..9 {
-        //     y_lables.push(format!("{:.0}", i as f64 * eight));
-        // }
         let x_labels: Vec<String> = Self::create_spaced_labels(36.0, 8)
             .into_iter()
             .map(|l| format!("{:.0}", l))
@@ -267,8 +283,6 @@ impl App {
             .into_iter()
             .map(|l| format!("{:.0}", l))
             .collect();
-
-        // let mut x_labels = Vec::new();
 
         let x_axis = Axis::default()
             .title("Months".red())
