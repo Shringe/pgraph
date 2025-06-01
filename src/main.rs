@@ -17,6 +17,7 @@ use ratatui::{
 };
 
 use device::Device;
+use rand::Rng;
 use std::io::Result;
 use textbox::Textbox;
 use timespan::Timespan;
@@ -62,6 +63,8 @@ struct App {
     initial_cost: Textbox,
     wattage: Textbox,
     highlighted: Highlighted,
+
+    randomize_graph_colors: bool,
 }
 
 impl App {
@@ -74,6 +77,8 @@ impl App {
             initial_cost: Textbox::new(),
             wattage: Textbox::new(),
             highlighted: Highlighted::ElectricityRate,
+
+            randomize_graph_colors: true,
         }
     }
 
@@ -143,10 +148,18 @@ impl App {
             Err(_) => todo!(),
         };
 
+        let color = if self.randomize_graph_colors {
+            let mut rng = rand::rng();
+            Color::Rgb(rng.random(), rng.random(), rng.random())
+        } else {
+            Color::Gray
+        };
+
         let d = Device {
             initial_cost,
             average_wattage,
             electricity_rate,
+            color,
         };
 
         if !self.devices.contains(&d) {
@@ -231,6 +244,7 @@ impl App {
                 Dataset::default()
                     .marker(symbols::Marker::Braille)
                     .graph_type(GraphType::Line)
+                    .fg(d.color)
                     .data(data_points),
             );
             if cost > max_cost {

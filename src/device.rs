@@ -1,12 +1,24 @@
+use ratatui::style::Color;
+
 use crate::{timespan::Timespan, wattage::Wattage};
 
-#[derive(PartialEq)]
 pub struct Device {
     pub initial_cost: f64,
     pub average_wattage: Wattage,
 
     /// kWh/$
     pub electricity_rate: f64,
+
+    pub color: Color,
+}
+
+impl PartialEq for Device {
+    fn eq(&self, other: &Self) -> bool {
+        self.initial_cost == other.initial_cost
+            && self.average_wattage == other.average_wattage
+            && self.electricity_rate == other.electricity_rate
+        // intentionally ignore `color`
+    }
 }
 
 impl Device {
