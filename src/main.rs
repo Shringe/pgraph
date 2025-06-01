@@ -12,12 +12,14 @@ use ratatui::{
         Layout, Rect,
     },
     style::{Color, Stylize},
-    widgets::{Block, Paragraph, Row, Table, Widget},
+    symbols,
+    widgets::{Axis, Block, Chart, Dataset, GraphType, Paragraph, Row, Table, Widget},
 };
 
 use device::Device;
 use std::io::Result;
 use textbox::Textbox;
+use timespan::Timespan;
 use wattage::Wattage;
 
 fn main() -> Result<()> {
@@ -109,6 +111,8 @@ impl App {
             KeyCode::Esc => self.exit(),
             KeyCode::Up => self.highlighted = self.highlighted.up(),
             KeyCode::Down => self.highlighted = self.highlighted.down(),
+            KeyCode::Tab => self.highlighted = self.highlighted.down(),
+            KeyCode::BackTab => self.highlighted = self.highlighted.up(),
             KeyCode::Left => textbox.move_cursor_left(),
             KeyCode::Right => textbox.move_cursor_right(),
             KeyCode::Char(c) => textbox.enter_char(c),
@@ -213,6 +217,70 @@ impl App {
         .block(Block::bordered())
         .render(devices_area, buf);
     }
+
+    fn render_graph(&self, area: Rect, buf: &mut Buffer) {
+        // Really gross memory leak
+        let mut datasets = Vec::new();
+        let mut max_cost = 0.0;
+        for d in &self.devices {
+            let cost = d.total_cost(&Timespan::from_months(36.0));
+            let data_points: &'_ [(f64, f64)] =
+                Box::leak(Box::new([(0.0, d.initial_cost), (36.0, cost)]));
+
+            datasets.push(
+                Dataset::default()
+                    .marker(symbols::Marker::Braille)
+                    .graph_type(GraphType::Line)
+                    .data(data_points),
+            );
+            if cost > max_cost {
+                max_cost = cost;
+            }
+        }
+
+        // let mut y_lables = Vec::new();
+        // let eight = max_cost / 8.0;
+        // for i in 1..9 {
+        //     y_lables.push(format!("{:.0}", i as f64 * eight));
+        // }
+        let x_labels: Vec<String> = Self::create_spaced_labels(36.0, 8)
+            .into_iter()
+            .map(|l| format!("{:.0}", l))
+            .collect();
+
+        let y_labels: Vec<String> = Self::create_spaced_labels(max_cost, 8)
+            .into_iter()
+            .map(|l| format!("{:.0}", l))
+            .collect();
+
+        // let mut x_labels = Vec::new();
+
+        let x_axis = Axis::default()
+            .title("Months".red())
+            .bounds([0.0, 36.0])
+            .labels(x_labels);
+
+        let y_axis = Axis::default()
+            .title("Cost".red())
+            .bounds([0.0, max_cost])
+            .labels(y_labels);
+
+        Chart::new(datasets)
+            .block(Block::bordered().title("Chart"))
+            .x_axis(x_axis)
+            .y_axis(y_axis)
+            .render(area, buf);
+    }
+
+    fn create_spaced_labels(max: f64, steps: u8) -> Vec<f64> {
+        let mut labels = Vec::new();
+        let fraction = max / steps as f64;
+        for i in 0..steps + 1 {
+            labels.push((i) as f64 * fraction);
+        }
+
+        labels
+    }
 }
 
 impl Widget for &App {
@@ -223,5 +291,6 @@ impl Widget for &App {
         let [equation_area, graph_area] = main_layout.areas(area);
 
         self.render_equations(equation_area, buf);
+        self.render_graph(graph_area, buf);
     }
 }

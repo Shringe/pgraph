@@ -6,12 +6,16 @@ pub struct Timespan {
 }
 
 impl Timespan {
-    pub fn new(hours: f64) -> Self {
+    pub fn from_hours(hours: f64) -> Self {
         Self {
             hours,
             days: hours / 24.0,
             months: hours / 720.0,
             years: hours / 8760.0,
         }
+    }
+
+    pub fn from_months(months: f64) -> Self {
+        Self::from_hours(months * 720.0)
     }
 }
