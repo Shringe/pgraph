@@ -1,4 +1,6 @@
-#[derive(PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(PartialEq, Serialize, Deserialize)]
 pub struct Wattage {
     pub watts: f64,
     pub kilowatts: f64,

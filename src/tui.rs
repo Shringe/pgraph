@@ -1,7 +1,7 @@
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     layout::{
         Constraint::{self},
         Layout, Rect,
@@ -11,24 +11,35 @@ use ratatui::{
     widgets::{Axis, Block, Chart, Dataset, GraphType, Paragraph, Row, Table, Widget},
 };
 
-use crate::{device::Device, textbox::Textbox, timespan::Timespan, wattage::Wattage};
+use crate::{
+    device::{Device, Rgb},
+    textbox::Textbox,
+    timespan::Timespan,
+    wattage::Wattage,
+};
 use rand::Rng;
-use std::io::Result;
+use std::{
+    fs::File,
+    io::{Result, Write},
+    path::Path,
+};
 
 enum Highlighted {
     ElectricityRate,
     InitialCost,
     Wattage,
     Name,
+    ListName,
 }
 
 impl Highlighted {
     pub fn up(&self) -> Self {
         match self {
-            Highlighted::ElectricityRate => Self::Name,
+            Highlighted::ElectricityRate => Self::ListName,
             Highlighted::InitialCost => Self::ElectricityRate,
             Highlighted::Wattage => Self::InitialCost,
             Highlighted::Name => Self::Wattage,
+            Highlighted::ListName => Self::Name,
         }
     }
 
@@ -37,7 +48,8 @@ impl Highlighted {
             Highlighted::ElectricityRate => Self::InitialCost,
             Highlighted::InitialCost => Self::Wattage,
             Highlighted::Wattage => Self::Name,
-            Highlighted::Name => Self::ElectricityRate,
+            Highlighted::Name => Self::ListName,
+            Highlighted::ListName => Self::ElectricityRate,
         }
     }
 }
@@ -50,6 +62,7 @@ pub struct App {
     initial_cost: Textbox,
     wattage: Textbox,
     name: Textbox,
+    list_name: Textbox,
     highlighted: Highlighted,
 
     randomize_graph_colors: bool,
@@ -65,6 +78,7 @@ impl Default for App {
             initial_cost: Textbox::new(),
             wattage: Textbox::new(),
             name: Textbox::new(),
+            list_name: Textbox::new(),
             highlighted: Highlighted::ElectricityRate,
 
             randomize_graph_colors: true,
@@ -82,6 +96,7 @@ impl App {
             initial_cost: Textbox::new(),
             wattage: Textbox::new(),
             name: Textbox::new(),
+            list_name: Textbox::new(),
             highlighted: Highlighted::ElectricityRate,
 
             randomize_graph_colors,
@@ -117,22 +132,44 @@ impl App {
             Highlighted::InitialCost => &mut self.initial_cost,
             Highlighted::Wattage => &mut self.wattage,
             Highlighted::Name => &mut self.name,
+            Highlighted::ListName => &mut self.list_name,
         };
 
-        match key.code {
-            KeyCode::Esc => self.exit(),
-            KeyCode::Up => self.highlighted = self.highlighted.up(),
-            KeyCode::Down => self.highlighted = self.highlighted.down(),
-            KeyCode::Tab => self.highlighted = self.highlighted.down(),
-            KeyCode::BackTab => self.highlighted = self.highlighted.up(),
-            KeyCode::Left => textbox.move_cursor_left(),
-            KeyCode::Right => textbox.move_cursor_right(),
-            KeyCode::Char(c) => textbox.enter_char(c),
-            KeyCode::Backspace => textbox.delete_char(),
-            KeyCode::Enter => self.add_device(),
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            match key.code {
+                KeyCode::Char('c') => self.exit(),
+                KeyCode::Char('s') => self.save(),
+                _ => {}
+            }
+        } else {
+            match key.code {
+                KeyCode::Esc => self.exit(),
+                KeyCode::Up => self.highlighted = self.highlighted.up(),
+                KeyCode::Down => self.highlighted = self.highlighted.down(),
+                KeyCode::Tab => self.highlighted = self.highlighted.down(),
+                KeyCode::BackTab => self.highlighted = self.highlighted.up(),
+                KeyCode::Left => textbox.move_cursor_left(),
+                KeyCode::Right => textbox.move_cursor_right(),
+                KeyCode::Char(c) => textbox.enter_char(c),
+                KeyCode::Backspace => textbox.delete_char(),
+                KeyCode::Enter => self.add_device(),
 
-            _ => {}
+                _ => {}
+            }
         }
+    }
+
+    fn save(&self) {
+        // let json = self.devices.serialize(s).expect("Failed to save devices.");
+        let json =
+            serde_json::to_string_pretty(&self.devices).expect("Failed to serialize devices!");
+
+        let path = Path::new("saves");
+        let mut file = File::create(path.join(&self.list_name.input))
+            .expect("Failed to open file for saving devices!");
+
+        file.write_all(json.as_bytes())
+            .expect("Couldn't write to savefile!");
     }
 
     fn exit(&mut self) {
@@ -159,9 +196,9 @@ impl App {
 
         let color = if self.randomize_graph_colors {
             let mut rng = rand::rng();
-            Color::Rgb(rng.random(), rng.random(), rng.random())
+            Rgb(rng.random(), rng.random(), rng.random())
         } else {
-            Color::Gray
+            Rgb(20, 20, 20)
         };
 
         let d = Device {
@@ -183,11 +220,18 @@ impl App {
             Constraint::Length(3),
             Constraint::Length(3),
             Constraint::Length(3),
+            Constraint::Length(3),
             Constraint::Percentage(100),
         ]);
 
-        let [rate_area, cost_area, wattage_area, name_area, devices_area] =
-            equation_layout.areas(area);
+        let [
+            rate_area,
+            cost_area,
+            wattage_area,
+            name_area,
+            list_name_area,
+            devices_area,
+        ] = equation_layout.areas(area);
 
         let highlighted_color = Color::Red;
         let unhighlighted_color = Color::Gray;
@@ -196,12 +240,14 @@ impl App {
         let mut cost_color = unhighlighted_color;
         let mut wattage_color = unhighlighted_color;
         let mut name_color = unhighlighted_color;
+        let mut list_name_color = unhighlighted_color;
 
         match self.highlighted {
             Highlighted::ElectricityRate => rate_color = highlighted_color,
             Highlighted::InitialCost => cost_color = highlighted_color,
             Highlighted::Wattage => wattage_color = highlighted_color,
             Highlighted::Name => name_color = highlighted_color,
+            Highlighted::ListName => list_name_color = highlighted_color,
         }
 
         Paragraph::new(self.electricity_rate.input.clone())
@@ -224,13 +270,18 @@ impl App {
             .fg(name_color)
             .render(name_area, buf);
 
+        Paragraph::new(self.list_name.input.clone())
+            .block(Block::bordered().title("Optional Name to Save the List Under"))
+            .fg(list_name_color)
+            .render(list_name_area, buf);
+
         let mut rows = Vec::new();
         for d in &self.devices {
             rows.push(Row::new(vec![
-                format!("{}", d.name).set_style(Style::new().fg(d.color)),
-                format!("{}", d.electricity_rate).set_style(Style::new().fg(d.color)),
-                format!("{}", d.initial_cost).set_style(Style::new().fg(d.color)),
-                format!("{}", d.average_wattage.watts).set_style(Style::new().fg(d.color)),
+                format!("{}", d.name).set_style(Style::new().fg(d.get_color())),
+                format!("{}", d.electricity_rate).set_style(Style::new().fg(d.get_color())),
+                format!("{}", d.initial_cost).set_style(Style::new().fg(d.get_color())),
+                format!("{}", d.average_wattage.watts).set_style(Style::new().fg(d.get_color())),
             ]));
         }
 
@@ -266,7 +317,7 @@ impl App {
                 Dataset::default()
                     .marker(symbols::Marker::Braille)
                     .graph_type(GraphType::Line)
-                    .fg(d.color)
+                    .fg(d.get_color())
                     .bg(Color::Black)
                     .data(data_points),
             );

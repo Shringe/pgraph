@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct Timespan {
     pub hours: f64,
     pub days: f64,
