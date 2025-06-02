@@ -20,7 +20,7 @@ use crate::{
 use rand::Rng;
 use std::{
     fs::File,
-    io::{Result, Write},
+    io::{BufReader, Result, Write},
     path::Path,
 };
 
@@ -139,6 +139,7 @@ impl App {
             match key.code {
                 KeyCode::Char('c') => self.exit(),
                 KeyCode::Char('s') => self.save(),
+                KeyCode::Char('l') => self.load_save(),
                 _ => {}
             }
         } else {
@@ -160,7 +161,6 @@ impl App {
     }
 
     fn save(&self) {
-        // let json = self.devices.serialize(s).expect("Failed to save devices.");
         let json =
             serde_json::to_string_pretty(&self.devices).expect("Failed to serialize devices!");
 
@@ -170,6 +170,15 @@ impl App {
 
         file.write_all(json.as_bytes())
             .expect("Couldn't write to savefile!");
+    }
+
+    fn load_save(&mut self) {
+        let path = Path::new("saves");
+        let file = File::open(path.join(&self.list_name.input))
+            .expect("Failed to open file for loading save!");
+        let reader = BufReader::new(file);
+
+        self.devices = serde_json::from_reader(reader).expect("Couldn't decode savefile!");
     }
 
     fn exit(&mut self) {
